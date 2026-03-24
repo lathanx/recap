@@ -62,8 +62,9 @@ type ParsedMessage struct {
 	Cwd       string
 	Text      string   // the visible text content
 	Thinking  string   // thinking/reasoning content (assistant only)
-	ToolCalls []ToolCall
-	Usage     *Usage
+	ToolCalls  []ToolCall
+	SkillCalls []SkillCall
+	Usage      *Usage
 	IsMeta    bool
 }
 
@@ -71,6 +72,12 @@ type ParsedMessage struct {
 type ToolCall struct {
 	Name  string
 	Input string // serialized JSON
+}
+
+// SkillCall represents a skill invocation (tool_use with name "Skill").
+type SkillCall struct {
+	Skill string
+	Args  string
 }
 
 // ParseContentString attempts to parse message content as a plain string.

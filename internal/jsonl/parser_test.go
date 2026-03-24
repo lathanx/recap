@@ -180,3 +180,118 @@ func TestToolResultsSkipped(t *testing.T) {
 		t.Fatalf("expected 0 messages (tool result), got %d", len(msgs))
 	}
 }
+
+func TestSkillCallBasic(t *testing.T) {
+	input := `{"type":"assistant","sessionId":"abc123","timestamp":"2026-02-26T18:00:03.572Z","gitBranch":"main","cwd":"/project","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"tool_use","id":"toolu_01","name":"Skill","input":{"skill":"commit"}}],"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"uuid":"aaa1"}`
+
+	msgs, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(msgs))
+	}
+	if len(msgs[0].SkillCalls) != 1 {
+		t.Fatalf("expected 1 skill call, got %d", len(msgs[0].SkillCalls))
+	}
+	expected := SkillCall{Skill: "commit", Args: ""}
+	if msgs[0].SkillCalls[0] != expected {
+		t.Errorf("expected skill call %+v, got %+v", expected, msgs[0].SkillCalls[0])
+	}
+}
+
+func TestSkillCallWithArgs(t *testing.T) {
+	input := `{"type":"assistant","sessionId":"abc123","timestamp":"2026-02-26T18:00:03.572Z","gitBranch":"main","cwd":"/project","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"tool_use","id":"toolu_02","name":"Skill","input":{"skill":"review-pr","args":"123"}}],"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"uuid":"aaa2"}`
+
+	msgs, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(msgs))
+	}
+	if len(msgs[0].SkillCalls) != 1 {
+		t.Fatalf("expected 1 skill call, got %d", len(msgs[0].SkillCalls))
+	}
+	expected := SkillCall{Skill: "review-pr", Args: "123"}
+	if msgs[0].SkillCalls[0] != expected {
+		t.Errorf("expected skill call %+v, got %+v", expected, msgs[0].SkillCalls[0])
+	}
+}
+
+func TestMultipleSkillCalls(t *testing.T) {
+	input := `{"type":"assistant","sessionId":"abc123","timestamp":"2026-02-26T18:00:03.572Z","gitBranch":"main","cwd":"/project","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"tool_use","id":"toolu_03","name":"Skill","input":{"skill":"commit"}},{"type":"tool_use","id":"toolu_04","name":"Skill","input":{"skill":"pdf","args":"report.pdf"}}],"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"uuid":"aaa3"}`
+
+	msgs, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(msgs))
+	}
+	if len(msgs[0].SkillCalls) != 2 {
+		t.Fatalf("expected 2 skill calls, got %d", len(msgs[0].SkillCalls))
+	}
+	if msgs[0].SkillCalls[0].Skill != "commit" {
+		t.Errorf("expected first skill=commit, got %s", msgs[0].SkillCalls[0].Skill)
+	}
+	if msgs[0].SkillCalls[1].Skill != "pdf" {
+		t.Errorf("expected second skill=pdf, got %s", msgs[0].SkillCalls[1].Skill)
+	}
+	if msgs[0].SkillCalls[1].Args != "report.pdf" {
+		t.Errorf("expected second args=report.pdf, got %s", msgs[0].SkillCalls[1].Args)
+	}
+}
+
+func TestSkillCallMixedWithRegularTools(t *testing.T) {
+	input := `{"type":"assistant","sessionId":"abc123","timestamp":"2026-02-26T18:00:03.572Z","gitBranch":"main","cwd":"/project","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"tool_use","id":"toolu_05","name":"Bash","input":{"command":"git status"}},{"type":"tool_use","id":"toolu_06","name":"Skill","input":{"skill":"commit","args":"-m fix"}}],"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"uuid":"aaa4"}`
+
+	msgs, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(msgs))
+	}
+	// Should have the Bash tool call in ToolCalls
+	if len(msgs[0].ToolCalls) < 1 {
+		t.Fatalf("expected at least 1 tool call, got %d", len(msgs[0].ToolCalls))
+	}
+	foundBash := false
+	for _, tc := range msgs[0].ToolCalls {
+		if tc.Name == "Bash" {
+			foundBash = true
+		}
+	}
+	if !foundBash {
+		t.Error("expected Bash in ToolCalls")
+	}
+	// Should have the Skill in SkillCalls
+	if len(msgs[0].SkillCalls) != 1 {
+		t.Fatalf("expected 1 skill call, got %d", len(msgs[0].SkillCalls))
+	}
+	if msgs[0].SkillCalls[0].Skill != "commit" {
+		t.Errorf("expected skill=commit, got %s", msgs[0].SkillCalls[0].Skill)
+	}
+	if msgs[0].SkillCalls[0].Args != "-m fix" {
+		t.Errorf("expected args='-m fix', got %s", msgs[0].SkillCalls[0].Args)
+	}
+}
+
+func TestSkillCallMalformedInput(t *testing.T) {
+	// Skill tool_use with input that is not valid JSON for skill extraction —
+	// should still appear as a regular ToolCall but not panic or error.
+	input := `{"type":"assistant","sessionId":"abc123","timestamp":"2026-02-26T18:00:03.572Z","gitBranch":"main","cwd":"/project","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"tool_use","id":"toolu_07","name":"Skill","input":"not-a-json-object"}],"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"uuid":"aaa5"}`
+
+	msgs, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(msgs))
+	}
+	// Malformed input: should have 0 skill calls (graceful degradation)
+	if len(msgs[0].SkillCalls) != 0 {
+		t.Errorf("expected 0 skill calls for malformed input, got %d", len(msgs[0].SkillCalls))
+	}
+}

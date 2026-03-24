@@ -170,6 +170,18 @@ func processAssistantEntry(entry Entry, ts time.Time) *ParsedMessage {
 				Name:  block.Name,
 				Input: inputStr,
 			})
+			if block.Name == "Skill" && block.Input != nil {
+				var si struct {
+					Skill string `json:"skill"`
+					Args  string `json:"args"`
+				}
+				if json.Unmarshal(block.Input, &si) == nil && si.Skill != "" {
+					msg.SkillCalls = append(msg.SkillCalls, SkillCall{
+						Skill: si.Skill,
+						Args:  si.Args,
+					})
+				}
+			}
 		}
 	}
 
