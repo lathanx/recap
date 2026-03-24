@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -62,6 +63,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d session files for %s\n", len(jsonlFiles), targetDate.Format("2006-01-02"))
 
+	var allMessages []jsonl.ParsedMessage
 	totalMessages := 0
 	for _, path := range jsonlFiles {
 		offset := st.GetOffset(path)
@@ -78,6 +80,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 		// Drop last assistant message for sessions already written by the stop hook
 		msgs = deduplicateHooked(msgs, st)
 
+		allMessages = append(allMessages, msgs...)
+
 		// Write messages to daily log
 		for _, msg := range msgs {
 			entry := formatMessage(msg)
@@ -92,6 +96,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 
 		st.SetOffset(path, newOffset)
+	}
+
+	// Append skill frequency table if any skills were used
+	allSkills := collectSkillCalls(allMessages)
+	if table := formatSkillFrequencyTable(allSkills); table != "" {
+		if err := log.AppendToDaily(targetDate, "\n"+table); err != nil {
+			fmt.Fprintf(os.Stderr, "  Warning: error writing skill table: %v\n", err)
+		}
 	}
 
 	// Clear hooked sessions when syncing a past date (fully processed)
@@ -177,6 +189,11 @@ func formatMessage(msg jsonl.ParsedMessage) string {
 			b.WriteString(formatToolSummary(msg.ToolCalls))
 			b.WriteString("_\n")
 		}
+		if len(msg.SkillCalls) > 0 {
+			b.WriteString("_Skills: ")
+			b.WriteString(formatSkillSummary(msg.SkillCalls))
+			b.WriteString("_\n")
+		}
 		if msg.Text != "" {
 			b.WriteString(indentContent(msg.Text))
 			b.WriteString("\n")
@@ -226,4 +243,62 @@ func formatToolSummary(calls []jsonl.ToolCall) string {
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+func formatSkillSummary(calls []jsonl.SkillCall) string {
+	counts := make(map[string]int)
+	var order []string
+	for _, sc := range calls {
+		if counts[sc.Skill] == 0 {
+			order = append(order, sc.Skill)
+		}
+		counts[sc.Skill]++
+	}
+	var parts []string
+	for _, name := range order {
+		if counts[name] == 1 {
+			parts = append(parts, name)
+		} else {
+			parts = append(parts, fmt.Sprintf("%s(%d)", name, counts[name]))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func collectSkillCalls(msgs []jsonl.ParsedMessage) []jsonl.SkillCall {
+	var result []jsonl.SkillCall
+	for _, msg := range msgs {
+		result = append(result, msg.SkillCalls...)
+	}
+	return result
+}
+
+func formatSkillFrequencyTable(calls []jsonl.SkillCall) string {
+	if len(calls) == 0 {
+		return ""
+	}
+	counts := make(map[string]int)
+	for _, sc := range calls {
+		counts[sc.Skill]++
+	}
+	type entry struct {
+		name  string
+		count int
+	}
+	entries := make([]entry, 0, len(counts))
+	for name, count := range counts {
+		entries = append(entries, entry{name, count})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].count != entries[j].count {
+			return entries[i].count > entries[j].count
+		}
+		return entries[i].name < entries[j].name
+	})
+	var b strings.Builder
+	b.WriteString("---\n## Skill Usage\n\n| Skill | Count |\n|-------|-------|\n")
+	for _, e := range entries {
+		fmt.Fprintf(&b, "| %s | %d |\n", e.name, e.count)
+	}
+	return b.String()
 }
