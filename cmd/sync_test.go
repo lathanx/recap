@@ -180,6 +180,45 @@ func TestFormatMessageAssistantNoTicketInfo(t *testing.T) {
 	}
 }
 
+func TestFilterMessagesByDateRange(t *testing.T) {
+	msgs := []jsonl.ParsedMessage{
+		{Timestamp: time.Date(2026, 3, 20, 10, 0, 0, 0, time.Local), Text: "day20"},
+		{Timestamp: time.Date(2026, 3, 22, 14, 30, 0, 0, time.Local), Text: "day22"},
+		{Timestamp: time.Date(2026, 3, 24, 8, 0, 0, 0, time.Local), Text: "day24"},
+		{Timestamp: time.Date(2026, 3, 26, 12, 0, 0, 0, time.Local), Text: "day26"},
+	}
+
+	start := time.Date(2026, 3, 21, 0, 0, 0, 0, time.Local)
+	end := time.Date(2026, 3, 24, 0, 0, 0, 0, time.Local)
+
+	got := filterMessagesByDateRange(msgs, start, end)
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(got))
+	}
+	if got[0].Text != "day22" {
+		t.Errorf("first message text = %q, want %q", got[0].Text, "day22")
+	}
+	if got[1].Text != "day24" {
+		t.Errorf("second message text = %q, want %q", got[1].Text, "day24")
+	}
+}
+
+func TestFilterMessagesByDateRange_EmptyInput(t *testing.T) {
+	start := time.Date(2026, 3, 21, 0, 0, 0, 0, time.Local)
+	end := time.Date(2026, 3, 24, 0, 0, 0, 0, time.Local)
+
+	got := filterMessagesByDateRange(nil, start, end)
+	if len(got) != 0 {
+		t.Errorf("nil input: expected 0 messages, got %d", len(got))
+	}
+
+	got = filterMessagesByDateRange([]jsonl.ParsedMessage{}, start, end)
+	if len(got) != 0 {
+		t.Errorf("empty input: expected 0 messages, got %d", len(got))
+	}
+}
+
 func TestDeduplicateHooked(t *testing.T) {
 	now := time.Now()
 	msgs := []jsonl.ParsedMessage{

@@ -225,6 +225,24 @@ func deduplicateHooked(msgs []jsonl.ParsedMessage, st *state.State) []jsonl.Pars
 	return filtered
 }
 
+// filterMessagesByDateRange keeps messages whose local date is within [start, end] inclusive.
+func filterMessagesByDateRange(msgs []jsonl.ParsedMessage, start, end time.Time) []jsonl.ParsedMessage {
+	var filtered []jsonl.ParsedMessage
+	startY, startM, startD := start.Date()
+	endY, endM, endD := end.Date()
+	startDate := time.Date(startY, startM, startD, 0, 0, 0, 0, time.UTC)
+	endDate := time.Date(endY, endM, endD, 0, 0, 0, 0, time.UTC)
+	for _, msg := range msgs {
+		local := msg.Timestamp.Local()
+		y, m, d := local.Date()
+		msgDate := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+		if !msgDate.Before(startDate) && !msgDate.After(endDate) {
+			filtered = append(filtered, msg)
+		}
+	}
+	return filtered
+}
+
 func formatToolSummary(calls []jsonl.ToolCall) string {
 	counts := make(map[string]int)
 	var order []string
