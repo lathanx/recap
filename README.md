@@ -8,29 +8,40 @@ A minimal CLI that automatically summarizes your Claude Code sessions into daily
 go build -o recap .
 ```
 
-## Setup
+## Usage
+
+Recap works without any setup, but I recommend running `recap install` first — see [Hooks](#hooks-optional) below. Hooks allow us to attach branch/ticket context, improving summaries.
+
+Point it at a day and it parses your Claude Code JSONL transcripts into a markdown log:
+
+```sh
+recap sync                          # parse today's sessions → daily markdown log
+recap sync --date 2026-03-10        # specific date
+recap summarize                     # AI-summarize today's daily log via claude -p
+recap run                           # sync + summarize (cron/launchd target)
+recap run --date yesterday          # process a different day
+```
+
+The `--date` flag works on `sync`, `summarize`, and `run`.
+
+## Hooks (optional)
 
 ```sh
 recap install
 ```
 
-Registers lifecycle hooks in `~/.claude/settings.json` and creates the `~/.recap/` directory. To remove hooks (logs are preserved):
+Without hooks, recap only captures sessions at sync time — you get the full transcript but nothing in real time. Installing hooks registers `SessionStart` and `Stop` listeners in `~/.claude/settings.json` that write to the daily log as you work:
+
+- **SessionStart** logs a session header with timestamp, git branch, and working directory the moment a session begins.
+- **Stop** captures Claude's final message immediately when a session ends, before sync runs.
+
+This means your daily log stays current throughout the day rather than only updating on the next sync. The sync command automatically deduplicates against hook entries, so there's no double-logging.
+
+To remove hooks (logs are preserved):
 
 ```sh
 recap uninstall
 ```
-
-## Usage
-
-```sh
-recap sync                          # parse JSONL sessions → daily markdown log
-recap summarize                     # AI-summarize today's daily log via claude -p
-recap run                           # sync + summarize (cron/launchd target)
-recap run --date yesterday          # process a different day
-recap run --date 2026-03-10         # specific date
-```
-
-The `--date` flag works on `sync`, `summarize`, and `run`.
 
 ## Scheduling
 
