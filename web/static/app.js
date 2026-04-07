@@ -15,6 +15,12 @@
     return dateStr <= todayStr();
   }
 
+  function formatDate(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
   // --- Calendar ---
 
   let selectedDate = null;
@@ -125,15 +131,16 @@
 
     const res = await fetch(`/api/days/${date}`);
     if (!res.ok) {
-      content.innerHTML = `<p class="empty">No log for ${date}. Try clicking Sync to pull in session data.</p>`;
+      content.innerHTML = `<div class="day-header"><h1>${formatDate(date)}</h1></div><p class="empty">No log for this date. Try clicking Sync to pull in session data.</p>`;
       return;
     }
 
     const data = await res.json();
-    let html = `<div class="day-header"><h1>${date}</h1></div>`;
+    let html = `<div class="day-header"><h1>${formatDate(date)}</h1></div>`;
 
     if (data.summary) {
-      html += `<div class="summary-content">${renderMarkdown(data.summary)}</div>`;
+      const stripped = data.summary.replace(/^#\s+(Daily )?Summary:.*\n+/, '');
+      html += `<div class="summary-content">${renderMarkdown(stripped)}</div>`;
     }
 
     if (data.content) {
