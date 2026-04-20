@@ -24,6 +24,15 @@ recap run --date yesterday          # process a different day
 
 The `--date` flag works on `sync`, `summarize`, and `run`.
 
+### Web GUI
+
+```sh
+recap web                           # open http://localhost:8484
+recap web --port 9090               # custom port
+```
+
+A calendar-based browser for your daily logs. Click any date to view its log, use the Sync and Summarize buttons to pull in new data or generate summaries.
+
 ## Hooks (optional)
 
 ```sh
